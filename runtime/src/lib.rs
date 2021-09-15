@@ -271,6 +271,32 @@ impl pallet_template::Config for Runtime {
 	type Event = Event;
 }
 
+parameter_types! {
+	pub const NickReservationFee: u128 = 200;
+	pub const MinNickLength: u32 = 4;
+	pub const MaxNickLength: u32 = 32;
+}
+
+impl pallet_nicks::Config for Runtime {
+	// https://substrate.dev/rustdocs/latest/pallet_balances/index.html#implementations-2
+	type Currency = Balances;
+
+	type ReservationFee = NickReservationFee;
+	type Slashed = ();
+
+	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
+
+	type MinLength = MinNickLength;
+	type MaxLength = MaxNickLength;
+
+	type Event = Event;
+}
+
+// Proof-of-play:
+// When I set Bob's name, kill it with Alice using `SUDO`, and then try to clear
+// it using Bob's account, I get a `DispatchError: {"module":{"index":9,"error":2}}`.
+// In other words, it fails, because Bob already lost his name.
+
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
 	pub enum Runtime where
@@ -288,6 +314,7 @@ construct_runtime!(
 		Sudo: pallet_sudo::{Pallet, Call, Config<T>, Storage, Event<T>},
 		// Include the custom logic from the pallet-template in the runtime.
 		TemplateModule: pallet_template::{Pallet, Call, Storage, Event<T>},
+		Nicks: pallet_nicks::{Pallet, Call, Storage, Event<T>}
 	}
 );
 
