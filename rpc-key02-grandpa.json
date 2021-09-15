@@ -1,0 +1,10 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "author_insertKey",
+  "params": [
+    "gran",
+    "garbage mango hood length play hat space crop pupil surprise space cupboard",
+    "0x550150d708807f393bcadb05f7fa59dd621f2bce43faab7c870926af665973d0"
+  ]
+}

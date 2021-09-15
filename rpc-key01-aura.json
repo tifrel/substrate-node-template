@@ -1,0 +1,10 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "author_insertKey",
+  "params": [
+    "aura",
+    "risk horn disagree black seven benefit canvas scare liberty legal sure cement",
+    "0xba49ca8a03bb34b6e0c8c18bd9ebf59ba983ef0803aa9a20e2dbadfa2b58bd61"
+  ]
+}

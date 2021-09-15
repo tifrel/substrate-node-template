@@ -1,0 +1,10 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "author_insertKey",
+  "params": [
+    "aura",
+    "garbage mango hood length play hat space crop pupil surprise space cupboard",
+    "0xb80dad381eb4c2274287a6d44fd1db4b6af3340805b029a65e9651800702694d"
+  ]
+}
