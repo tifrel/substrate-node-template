@@ -43,6 +43,8 @@ pub use sp_runtime::{Perbill, Permill};
 /// Import the template pallet.
 pub use pallet_template;
 
+use pallet_contracts::weights::WeightInfo;
+
 /// An index to a block.
 pub type BlockNumber = u32;
 
@@ -271,6 +273,85 @@ impl pallet_template::Config for Runtime {
 	type Event = Event;
 }
 
+// Pricing units for contracts
+pub const MILLICENTS: Balance = 1_000_000_000;
+pub const CENTS: Balance = 1_000 * MILLICENTS;
+pub const DOLLARS: Balance = 100 * CENTS;
+
+const fn deposit(items: u32, bytes: u32) -> Balance {
+	items as Balance * 15 * CENTS + (bytes as Balance) * 6 * CENTS
+}
+
+const AVERAGE_ON_INITIALIZE_RATIO: Perbill = Perbill::from_percent(10);
+
+parameter_types! {
+	pub TombstoneDeposit: Balance = deposit(
+		1,
+		<pallet_contracts::Pallet<Runtime>>::contract_info_size()
+	);
+	pub DepositPerContract: Balance = TombstoneDeposit::get();
+	pub const DepositPerStorageByte: Balance = deposit(0, 1);
+	pub const DepositPerStorageItem: Balance = deposit(1, 0);
+	pub RentFraction: Perbill = Perbill::from_rational(1u32, 30 * DAYS);
+	pub const SurchargeReward: Balance = 150 * MILLICENTS;
+	pub const SignedClaimHandicap: u32 = 2;
+	pub const MaxValueSize: u32 = 16 * 1024;
+	pub DeletionWeightLimit: Weight = AVERAGE_ON_INITIALIZE_RATIO * BlockWeights::get().max_block;
+	pub DeletionQueueDepth: u32 = ((DeletionWeightLimit::get() / (
+		<Runtime as pallet_contracts::Config>::WeightInfo::on_initialize_per_queue_item(1) -
+		<Runtime as pallet_contracts::Config>::WeightInfo::on_initialize_per_queue_item(0)
+	)) / 5) as u32;
+	pub Schedule: pallet_contracts::Schedule<Runtime> = Default::default();
+}
+
+impl pallet_contracts::Config for Runtime {
+	/// Time implementation that are supplied to contracts via `seal_now`
+	type Time = Timestamp;
+	/// Randomness supplied to contracts via `seal_random`
+	type Randomness = RandomnessCollectiveFlip;
+	/// Currency for contract fees and balances
+	type Currency = Balances;
+	/// Substrate base event type
+	type Event = Event;
+	/// Handler for rent payments
+	type RentPayment = ();
+	/// ???
+	type SignedClaimHandicap = SignedClaimHandicap;
+	/// Minimum amount required to generate a tombstone
+	type TombstoneDeposit = TombstoneDeposit;
+	/// A balance required for a contract to stay alive indefinitely
+	type DepositPerContract = DepositPerContract;
+	/// Additional balance to stay alive indefinitely, per byte of used storage
+	type DepositPerStorageByte = DepositPerStorageByte;
+	/// Additional balance to stay alive indefinitely, per item deposited in
+	/// storage
+	type DepositPerStorageItem = DepositPerStorageItem;
+	/// Fraction of deposit that is used as rent per block
+	/// Rent triggers when deposit falls below threshold to stay alive
+	/// indefinitely
+	type RentFraction = RentFraction;
+	/// Reward for the party who triggered contract removal
+	type SurchargeReward = SurchargeReward;
+	/// For a contract to query the current weight price
+	type WeightPrice = pallet_transaction_payment::Pallet<Self>;
+	/// Yield weights of the dispatchables of this module
+	type WeightInfo = pallet_contracts::weights::SubstrateWeight<Self>;
+	/// Allow runtime authors to add new host functions (I guess void means no
+	/// allowance)
+	type ChainExtension = ();
+	/// Maximum number of tries to be queued for deletion
+	type DeletionQueueDepth = DeletionQueueDepth;
+	/// Maximum amount of weight consumed per block, used in lazy trie removal
+	type DeletionWeightLimit = DeletionWeightLimit;
+	/// Substrate base call type?
+	type Call = Call;
+	/// Safest default
+	type CallFilter = frame_support::traits::Nothing;
+	/// Cost schedule and limits
+	type Schedule = Schedule;
+	/// Maximum nesting depth of contract calls (in this case 32)
+	type CallStack = [pallet_contracts::Frame<Self>; 31];
+}
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
 	pub enum Runtime where
@@ -288,6 +369,7 @@ construct_runtime!(
 		Sudo: pallet_sudo::{Pallet, Call, Config<T>, Storage, Event<T>},
 		// Include the custom logic from the pallet-template in the runtime.
 		TemplateModule: pallet_template::{Pallet, Call, Storage, Event<T>},
+		Contracts: pallet_contracts::{Pallet, Call, Storage, Event<T>}
 	}
 );
 
@@ -446,6 +528,46 @@ impl_runtime_apis! {
 			len: u32,
 		) -> pallet_transaction_payment::FeeDetails<Balance> {
 			TransactionPayment::query_fee_details(uxt, len)
+		}
+	}
+
+	impl pallet_contracts_rpc_runtime_api::ContractsApi<Block, AccountId, Balance, BlockNumber, Hash>
+	for Runtime {
+		fn call(
+			origin: AccountId,
+			dest: AccountId,
+			value: Balance,
+			gas_limit: u64,
+			input_data: Vec<u8>,
+		) -> pallet_contracts_primitives::ContractExecResult {
+			let debug = true;
+			Contracts::bare_call(origin, dest, value, gas_limit, input_data, debug)
+		}
+
+		fn instantiate(
+			origin: AccountId,
+			endowment: Balance,
+			gas_limit: u64,
+			code: pallet_contracts_primitives::Code<Hash>,
+			data: Vec<u8>,
+			salt: Vec<u8>,
+		) -> pallet_contracts_primitives::ContractInstantiateResult<AccountId, BlockNumber> {
+			let compute_rent_projection = true;
+			let debug = true;
+			Contracts::bare_instantiate(origin, endowment, gas_limit, code, data, salt, compute_rent_projection, debug)
+		}
+
+		fn get_storage(
+			address: AccountId,
+			key: [u8; 32],
+		) -> pallet_contracts_primitives::GetStorageResult {
+			Contracts::get_storage(address, key)
+		}
+
+		fn rent_projection(
+			address: AccountId,
+		) -> pallet_contracts_primitives::RentProjectionResult<BlockNumber> {
+			Contracts::rent_projection(address)
 		}
 	}
 
